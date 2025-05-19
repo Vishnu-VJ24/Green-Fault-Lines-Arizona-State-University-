@@ -1,0 +1,371 @@
+---
+title: "Climate Change International"
+format: html
+editor: visual
+---
+## Libraries 
+```{r}
+library(RColorBrewer)
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(corrplot)
+library(miceadds)  
+library(sjPlot)  
+library(modelsummary) 
+library(dotwhisker)  
+library(broom) 
+```
+
+## Load Data
+```{r}
+environ <- read.csv("qog_ei_ts_sept21.csv", stringsAsFactors = FALSE)
+qog <- read.csv("qog_std_ts_jan25.csv", stringsAsFactors = FALSE)
+```
+
+## Subset variables 
+```{r}
+vars_qog<- c("cname_qog", "year",  # Country name and year
+                   "p_polity2",  # Polity IV score (-10 to 10), measures democracy-autocracy
+                   "gain_gain",  # ND-GAIN Country Index: Measures climate adaptation readiness & vulnerability
+                   "gain_gaingdp",  # ND-GAIN Index adjusted for GDP
+                   "gain_hab",  # Human Habitat Vulnerability
+                   "gain_heal",  # Health Vulnerability
+                   "gain_inf",  # Infrastructural Vulnerability
+                   "gain_read",  # Readiness for Adaptation Actions
+                   "gain_readgdp",  # Readiness for Adaptation Actions adjusted for GDP
+                   "gain_sens",  # Sensitivity to Climate Change
+                   "gain_soc",  # Social Readiness
+                   "gain_vuln",  # Vulnerability to Climate Change
+                   "gain_vulngdp",  # Vulnerability to Climate Change adjusted for GDP
+                   "gain_wat",  # Water Vulnerability
+                   "vdem_corr",  # V-Dem Political Corruption Index (higher = more corruption)
+                   "cspf_sfi",  # State Fragility Index (higher = more fragile state)
+                   "sgi_en",  # Environmental Policy Performance Index
+                   "wdi_gdpcapcon2015",  # GDP per capita (constant 2015 US dollars)
+                   "wdi_gdpcapcur",  # GDP per capita (current US dollars)
+                   "vdem_gender",  # Women Political Empowerment Index
+                   "vdem_jucorrdc",  # Judicial Corruption in Decision-Making
+                   "vdem_libdem",  # Liberal Democracy Index
+                   "ictd_revres",  # Total Resource Revenue
+                   "wdi_elerenew",  # Renewable Electricity Output (% of total electricity)
+                   "wdi_idpdis",  # Internally displaced persons, new displacement due to disasters (number)
+                   "wdi_idpvc",  # Internally displaced persons, new displacement due to conflict & violence (number)
+                   "wdi_import",  # Imports of goods and services (% of GDP)
+                   "wdi_pop",  # Total Population
+                   "wdi_popden",  # Population Density (people per sq. km of land area)
+                   "wdi_poprul",  # Rural Population (% of total population)
+                   "wdi_popurb",  # Urban Population (% of total population)
+                   "wdi_refasy",  # Refugee Population by Country or Territory of Asylum
+                   "wdi_taxrev",  # Tax Revenue (% of GDP)
+                   "wdi_trade")  # Trade (% of GDP)
+
+qog_subset <- qog[vars_qog]
+
+
+
+
+vars_environ <- c("cname_qog", "year",  # Country name and year
+                           #"epi_epi",  # Environmental Performance Index (EPI)
+                           "epi_ghp",  # GHG emissions per capita
+                           "epi_grl")  # Grassland loss
+environ_subset<- environ[vars_environ]
+
+
+
+
+
+
+
+final <- merge(environ, qog_subset, by = c("cname_qog", "year"), all.x = TRUE)
+```
+
+
+## Explanatory Data Analysis
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+
+environ_2020 <- environ|>
+  filter(year == 2019)
+
+world <- world %>%
+  left_join(environ_2020, by = c("name" = "cname"))
+
+ggplot(data = world) +
+  geom_sf(aes(fill = epi_epi), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "viridis", na.value = "grey80") +
+  labs(title = "Environmental Performance Index (EPI) ",
+       fill = "EPI Score") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank())
+```
+
+## Correlation 
+```{r}
+selected_vars <- c("epi_ghp", "gain_sens", "gain_gain", "gain_vuln",  # Dependent variables
+                   "wdi_gdpcapcon2015", "wdi_trade", "ictd_revres", "wdi_elerenew", 
+                   "vdem_corr", "p_polity2", "wdi_popden", "gain_readgdp", "gain_heal", 
+                   "vdem_jucorrdc", "cspf_sfi", "wdi_taxrev", "wdi_refasy", "gain_hab", 
+                   "gain_inf", "wdi_popurb", "vdem_gender", "gain_wat", "wdi_poprul")
+
+final_subset <- final[, selected_vars]
+
+
+cor_matrix <- cor(final_subset, use = "pairwise.complete.obs", method = "pearson")
+
+
+print(cor_matrix)
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45, diag = FALSE)
+
+```
+
+
+## Models - feglm
+```{r}
+m1 <- feglm(epi_ghp ~ wdi_gdpcapcon2015 + wdi_trade + ictd_revres + wdi_elerenew + 
+            vdem_corr + p_polity2 + wdi_popden, 
+            data = final, family = gaussian(), cluster = ~ cname_qog)
+
+m2 <- feglm(gain_sens ~ gain_hab + gain_inf + wdi_pop + wdi_refasy + wdi_popurb + 
+            vdem_corr + wdi_taxrev, 
+            data = final, family = gaussian(), cluster = ~ cname_qog)
+
+m3 <- feglm(gain_gain ~ wdi_gdpcapcur + gain_readgdp + gain_heal + vdem_jucorrdc + 
+            wdi_trade + cspf_sfi + wdi_elerenew, 
+            data = final, family = gaussian(), cluster = ~ cname_qog)
+
+m4 <- feglm(gain_vuln ~ wdi_gdpcapcon2015 + gain_hab + gain_heal + gain_inf + gain_wat + 
+            vdem_gender + wdi_poprul, 
+            data = final, family = gaussian(), cluster = ~ cname_qog)
+
+
+models <- list(m1, m2, m3, m4)
+
+
+var_labels <- c(
+  #### Dependent Variables
+  "epi_ghp" = "GHG Emissions per Capita",
+  "gain_sens" = "Climate Sensitivity",
+  "gain_gain" = "Climate Adaptation Readiness (ND-GAIN Index)",
+  "gain_vuln" = "Climate Vulnerability",
+
+  ### Economic Variables
+  "wdi_gdpcapcon2015" = "GDP per Capita (Constant 2015 USD)",
+  "wdi_gdpcapcur" = "GDP per Capita (Current USD)",
+  "wdi_trade" = "Trade (% of GDP)",
+  "wdi_taxrev" = "Tax Revenue (% of GDP)",
+  "ictd_revres" = "Resource Revenue",
+
+  ### Governance and Political Indicators
+  "p_polity2" = "Polity Score (Democracy-Autocracy)",
+  "vdem_corr" = "Political Corruption Index",
+  "vdem_jucorrdc" = "Judicial Corruption Index",
+  "vdem_gender" = "Women Political Empowerment Index",
+  "cspf_sfi" = "State Fragility Index",
+
+  ### Environmental and Climate Readiness
+  "wdi_elerenew" = "Renewable Electricity Output (% of Total)",
+  "gain_readgdp" = "Readiness Index (Adjusted for GDP)",
+  "gain_heal" = "Health Vulnerability",
+  "gain_hab" = "Habitat Vulnerability",
+  "gain_inf" = "Infrastructure Vulnerability",
+  "gain_wat" = "Water Vulnerability",
+
+  ### Demographic and Population Indicators
+  "wdi_pop" = "Total Population",
+  "wdi_popden" = "Population Density (People per sq. km)",
+  "wdi_popurb" = "Urban Population (% of Total)",
+  "wdi_poprul" = "Rural Population (% of Total)",
+  "wdi_refasy" = "Refugee Population (Country of Asylum)"
+)
+
+
+### Generate regression table
+tab_model(models[[1]], models[[2]], models[[3]], models[[4]], 
+          show.ci = FALSE, 
+          show.se = TRUE, 
+          p.style = "stars", 
+          title = "Regression Results",
+          dv.labels = c("GHG Emissions", "Climate Sensitivity", "Climate Adaptation Readiness", "Climate Vulnerability"),
+          string.pred = "Predictors",
+          string.est = "Estimates",
+          pred.labels = var_labels) 
+
+```
+
+### coeffiecient plots 
+```{r}
+m1_tidy <- tidy(m1) %>% mutate(model = "GHG Emissions")
+m2_tidy <- tidy(m2) %>% mutate(model = "Climate Sensitivity")
+m3_tidy <- tidy(m3) %>% mutate(model = "Climate Adaptation Readiness")
+m4_tidy <- tidy(m4) %>% mutate(model = "Climate Vulnerability")
+
+all_models <- bind_rows(m1_tidy, m2_tidy, m3_tidy, m4_tidy)
+
+
+ggplot(all_models, aes(x = estimate, y = term, color = model)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = estimate - std.error, xmax = estimate + std.error)) +
+  facet_wrap(~ model, scales = "free_x") +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Regression Models",
+       x = "Coefficient Estimate", y = "Predictors")
+```
+
+
+## Models- GLM Cluster
+```{r}
+
+m1 <- glm.cluster(epi_ghp ~ wdi_gdpcapcon2015 + wdi_trade + ictd_revres + wdi_elerenew + 
+                  vdem_corr + p_polity2 + wdi_popden, 
+                  data = final, family = gaussian(), cluster = final$cname_qog)
+
+m2 <- glm.cluster(gain_sens ~ gain_hab + gain_inf + wdi_pop + wdi_refasy + wdi_popurb + 
+                  vdem_corr + wdi_taxrev, 
+                  data = final, family = gaussian(), cluster = final$cname_qog)
+
+m3 <- glm.cluster(gain_gain ~ wdi_gdpcapcur + gain_readgdp + gain_heal + vdem_jucorrdc + 
+                  wdi_trade + cspf_sfi + wdi_elerenew, 
+                  data = final, family = gaussian(), cluster = final$cname_qog)
+
+m4 <- glm.cluster(gain_vuln ~ wdi_gdpcapcon2015 + gain_hab + gain_heal + gain_inf + gain_wat + 
+                  vdem_gender + wdi_poprul, 
+                  data = final, family = gaussian(), cluster = final$cname_qog)
+
+
+summary(m1)
+summary(m2)
+summary(m3)
+summary(m4)
+
+m1m <- glm(epi_ghp ~ wdi_gdpcapcon2015 + wdi_trade + ictd_revres + wdi_elerenew + 
+                  vdem_corr + p_polity2 + wdi_popden, 
+                  data = final, family = gaussian())
+
+m2m <- glm(gain_sens ~ gain_hab + gain_inf + wdi_pop + wdi_refasy + wdi_popurb + 
+                  vdem_corr + wdi_taxrev, 
+                  data = final, family = gaussian())
+
+m3m <- glm(gain_gain ~ wdi_gdpcapcur + gain_readgdp + gain_heal + vdem_jucorrdc + 
+                  wdi_trade + cspf_sfi + wdi_elerenew, 
+                  data = final, family = gaussian())
+
+m4m <- glm(gain_vuln ~ wdi_gdpcapcon2015 + gain_hab + gain_heal + gain_inf + gain_wat + 
+                  vdem_gender + wdi_poprul, 
+                  data = final, family = gaussian())
+vif(m1m)
+vif(m2m)
+vif(m3m)
+vif(m4m)
+```
+
+
+### coefficient plots 
+```{r}
+
+# Define human-readable variable names (including intercept)
+var_labels <- c(
+  "(Intercept)" = "Intercept",
+  "wdi_gdpcapcon2015" = "GDP per Capita (Constant 2015 USD)",
+  "wdi_gdpcapcur" = "GDP per Capita (Current USD)",
+  "wdi_trade" = "Trade (% of GDP)",
+  "wdi_taxrev" = "Tax Revenue (% of GDP)",
+  "ictd_revres" = "Resource Revenue",
+  "p_polity2" = "Polity Score (Democracy-Autocracy)",
+  "vdem_corr" = "Political Corruption Index",
+  "vdem_jucorrdc" = "Judicial Corruption Index",
+  "vdem_gender" = "Women Political Empowerment Index",
+  "cspf_sfi" = "State Fragility Index",
+  "wdi_elerenew" = "Renewable Electricity Output (% of Total)",
+  "gain_readgdp" = "Readiness Index (Adjusted for GDP)",
+  "gain_heal" = "Health Vulnerability",
+  "gain_hab" = "Habitat Vulnerability",
+  "gain_inf" = "Infrastructure Vulnerability",
+  "gain_wat" = "Water Vulnerability",
+  "wdi_pop" = "Total Population",
+  "wdi_popden" = "Population Density (People per sq. km)",
+  "wdi_popurb" = "Urban Population (% of Total)",
+  "wdi_poprul" = "Rural Population (% of Total)",
+  "wdi_refasy" = "Refugee Population (Country of Asylum)"
+)
+
+# Function to extract coefficients from glm.cluster models and rank them
+extract_coeffs <- function(model, model_name) {
+  tidy(model$glm_res) %>%
+    mutate(model = model_name) %>%
+    arrange(estimate) %>%  # Sort variables from negative to positive effect
+    mutate(term = ifelse(term %in% names(var_labels), var_labels[term], term))  # Replace variable names with readable labels
+}
+
+# Extract and rank coefficients for each model
+m1_tidy <- extract_coeffs(m1, "GHG Emissions")
+m2_tidy <- extract_coeffs(m2, "Climate Sensitivity")
+m3_tidy <- extract_coeffs(m3, "Climate Adaptation Readiness")
+m4_tidy <- extract_coeffs(m4, "Climate Vulnerability")
+
+# Function to plot coefficients for a single model with ranking
+plot_coefficients <- function(model_data, model_title) {
+  ggplot(model_data, aes(x = estimate, y = reorder(term, estimate))) +  # Reorder by estimate value
+    geom_point(size = 3, color = "blue") +
+    geom_errorbarh(aes(xmin = estimate - std.error, xmax = estimate + std.error), height = 0.2, color = "blue") +
+    theme_minimal() +
+    labs(title = paste("Coefficient Estimates for", model_title),
+         x = "Coefficient Estimate", y = "Predictors") +
+    theme(legend.position = "none")
+}
+
+# Plot each model separately with ranked variables and names
+plot1 <- plot_coefficients(m1_tidy, "GHG Emissions")
+plot2 <- plot_coefficients(m2_tidy, "Climate Sensitivity")
+plot3 <- plot_coefficients(m3_tidy, "Climate Adaptation Readiness")
+plot4 <- plot_coefficients(m4_tidy, "Climate Vulnerability")
+
+# Print the plots
+print(plot1)
+print(plot2)
+print(plot3)
+print(plot4)
+
+```
+
+### actual values vs predicted
+```{r}
+add_predictions <- function(model, data, model_name, response_var) {
+  glm_model <- model$glm_res
+  
+ 
+  data %>%
+    mutate(predicted = predict(glm_model, newdata = data, type = "response"),
+           actual = data[[response_var]],  ### Store actual values
+           model = model_name)
+}
+
+
+df1 <- add_predictions(m1, final, "GHG Emissions", "epi_ghp")
+df2 <- add_predictions(m2, final, "Climate Sensitivity", "gain_sens")
+df3 <- add_predictions(m3, final, "Climate Adaptation Readiness", "gain_gain")
+df4 <- add_predictions(m4, final, "Climate Vulnerability", "gain_vuln")
+
+### combine all predictions into one data frame
+all_predictions <- bind_rows(df1, df2, df3, df4)
+
+### plot actual vs predicted values
+ggplot(all_predictions, aes(x = predicted, y = actual)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  facet_wrap(~ model, scales = "free") +
+  theme_minimal() +
+  labs(title = "Predicted vs Actual Values",
+       x = "Predicted Values", y = "Actual Values")
+```
+
+
+
+
+
