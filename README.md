@@ -1,7 +1,7 @@
 
 # 🌍 Green Fault Lines: Climate Change & Political Economy
 
-This repository contains an international analysis of climate change vulnerability, readiness, and governance using political, environmental, and economic data. The project was part of a research initiative at **Arizona State University**, guided by **Namig Abbasov (PhD student)**.
+This repository contains an international analysis of climate change vulnerability, readiness, and governance using political, environmental, and economic data. The project was part of a research initiative at **Arizona State University**, guided by **Namig Abbasov**.
 
 ## 🔍 Background
 This project, titled **"Green Fault Lines"**, explored global challenges surrounding:
@@ -37,7 +37,7 @@ Written in **R** using the following packages:
 ```
 
 ## 📚 Acknowledgment
-This project was conducted at **Arizona State University** under the guidance of **Namig Abbasov (PhD student)**. I was involved in the early-stage review and analysis planning. Due to academic workload, I could not contribute further but have documented and preserved the core analytical pipeline for public learning and replication.
+This project was conducted at **Arizona State University** under the guidance of **Mr. Namig Abbasov**. I was involved in the early-stage review and analysis planning. Due to academic workload, I could not contribute further but have documented and preserved the core analytical pipeline for public learning and replication.
 
 ## 🖼 Visuals
 - Choropleth map of EPI (Environmental Performance Index)
