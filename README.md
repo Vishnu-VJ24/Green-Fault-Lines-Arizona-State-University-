@@ -48,7 +48,7 @@ This project was conducted at **Arizona State University** under the guidance of
 ## 📌 To Run
 You can render the full report using:
 ```bash
-quarto render climate_change_international.qmd
+quarto render Main.qmd
 ```
 
 ---
